@@ -1,0 +1,65 @@
+/* ============================================================
+   서클 배틀 - 공통 스타일 (style.css)
+   ============================================================ */
+
+:root {
+  --solar: #ffb23e;
+  --solar-glow: #ff7a3d;
+  --lunar: #46d2ff;
+  --lunar-glow: #8f7dff;
+  --neon: #7c6cff;
+  --mint: #4ff0c0;
+  --bg: #0d1130;
+  --panel: rgba(18, 22, 56, 0.82);
+  --text: #f3f5ff;
+  --font: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  /* 태블릿에서 길게 누르기, 확대, 글자 선택 막기 */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font-family: var(--font);
+  cursor: pointer;
+  border: none;
+}
+
+/* 세로 화면 안내: 좁은 세로 화면에서만 보입니다 */
+#rotate-notice {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 22px;
+  text-align: center;
+}
+#rotate-notice .rotate-icon {
+  font-size: 56px;
+  color: var(--neon);
+}
+@media (orientation: portrait) and (max-width: 900px) {
+  #rotate-notice { display: flex; }
+}
