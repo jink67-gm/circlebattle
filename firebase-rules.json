@@ -1,0 +1,52 @@
+{
+  "rules": {
+    "circleBattle": {
+      "rooms": {
+        "$code": {
+          ".read": "$code.matches(/^[0-9]{4}$/)",
+          ".write": "$code.matches(/^[0-9]{4}$/)",
+          ".validate": "newData.child('meta/hostId').isString()",
+
+          "meta": {
+            ".validate": "newData.hasChildren(['hostId', 'status'])",
+            "hostId": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,40}$/)" },
+            "hostOnline": { ".validate": "newData.isBoolean()" },
+            "status": { ".validate": "newData.val() === 'lobby' || newData.val() === 'playing'" },
+            "createdAt": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "settings": { ".validate": "newData.hasChildren()" },
+            "teacher": {
+              "nick": { ".validate": "newData.isString() && newData.val().length <= 12" },
+              "plays": { ".validate": "newData.isBoolean()" },
+              "$other": { ".validate": false }
+            },
+            "$other": { ".validate": false }
+          },
+
+          "players": {
+            "$pid": {
+              ".validate": "$pid.matches(/^[A-Za-z0-9_-]{1,40}$/) && newData.hasChildren(['nick', 'charId'])",
+              "nick": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 8" },
+              "charId": { ".validate": "newData.isString() && newData.val().matches(/^[a-z]{1,20}$/)" },
+              "at": { ".validate": "newData.isNumber()" },
+              "$other": { ".validate": false }
+            }
+          },
+
+          "roster": { ".validate": "newData.hasChildren()" },
+          "match": { ".validate": "newData.hasChildren(['id', 'lineup'])" },
+          "snap": { ".validate": "newData.hasChildren(['mid'])" },
+          "result": { ".validate": "newData.hasChildren(['mid'])" },
+
+          "in": {
+            "$pid": { ".validate": "$pid.matches(/^[A-Za-z0-9_-]{1,40}$/) && newData.hasChildren(['mid'])" }
+          },
+          "kick": {
+            "$pid": { ".validate": "$pid.matches(/^[A-Za-z0-9_-]{1,40}$/) && newData.isBoolean()" }
+          },
+
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}
