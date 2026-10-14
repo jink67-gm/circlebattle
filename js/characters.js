@@ -1,0 +1,224 @@
+/* ============================================================
+   서클 배틀 - 캐릭터 6종 (characters.js)
+   ------------------------------------------------------------
+   모든 캐릭터 능력치는 이 파일에서 관리합니다. (플레이 테스트 후 조절)
+   거리·속도 단위: m, m/s   /  시간 단위: 초
+   STEP 2에서는 speed(이동속도)와 모양만 사용하고,
+   나머지 값은 STEP 4~9에서 공격·특수기를 만들 때 사용합니다.
+
+   attack 안의 값
+     damage     한 번 맞혔을 때 피해 (STEP 5)
+     range      사거리 (m)
+     reloadSec  탄약 1발이 다시 차는 시간 (초)
+     shape      'bolt' 직선 탄 / 'orb' 느리고 큰 구체 / 'wave' 부채꼴 충격파
+                'shell' 포격 (엔지니어): 조준한 곳으로 포물선을 그리며 날아가 떨어진 자리 둘레(splash)에 피해
+                        벽·방벽 위로 넘어감(떨어지는 자리는 보임). minRange~range 사이 원하는 거리에 떨어짐
+     speed      탄 속도 (m/s)
+     size       탄 반지름 (m)
+     spreadDeg  부채꼴 충격파의 벌어진 각도 (도)
+
+   special 안의 값 (STEP 9)
+     type       'blast' 폭발 / 'shield' 보호막 / 'heal' 회복존 / 'blink' 순간이동
+                'turret' 터렛 / 'slow' 둔화지역
+     castRange  원의 중심을 놓을 수 있는 최대 거리 (m). 0이면 내 자리
+     cost       한 번 쓰는 데 드는 에너지(⚡) — 레벨과 상관없이 같음 (수정 STEP 4)
+     levels     수정 STEP 4: 스킬 성장 LEVEL 1·2·3 (에너지 터미널 문제를 맞힐 때마다 한 단계)
+                경기 시작은 LEVEL 0(잠금). 1번째 정답 LEVEL 1 해금 → 2번째 LEVEL 2 → 3번째 LEVEL 3 MAX
+                r         효과 범위 원의 반지름 (m) — 스피더는 순간이동할 수 있는 원의 반지름
+                duration  지속 시간 (초)
+                그 밖에   damage 피해 / healPerSec 초당 회복 / slowFactor 이동속도에 곱하는 값 / fireInterval 터렛 발사 간격
+                LEVEL 2·3 은 학생이 바로 느낄 만큼 (범위·시간·효과가 함께) 강해지도록 정했습니다.
+                새 STEP 3: 캐릭터마다 "색만 다른 캐릭터"가 되지 않도록 고유한 효과를 더했습니다.
+                  knockback  블래스터: 원 안의 상대를 원 밖 방향으로 밀어내는 거리 (m) — 존에서 밀어내기
+                  shieldHp   가디언: 보호막이 막을 수 있는 피해의 양 (다 막으면 깨짐)
+                  fortify    가디언 LEVEL 3: 보호막 안 우리 팀은 밀려나지 않고 느려지지 않음
+                  burst      메딕 LEVEL 3: 놓자마자 원 안 우리 팀을 바로 회복하는 양
+                  dash       스피더 LEVEL 3: 도착한 뒤 더 빨리 달리는 시간 (초)
+                  hp         엔지니어: 터렛 체력 (상대가 쏘면 부서짐, 엔지니어 한 명당 터렛 1개)
+                  sensor     엔지니어 LEVEL 3: 터렛 원 안의 부쉬에 숨은 상대를 드러냄
+   ultimate      궁극기 (터미널 LEVEL 2 해금 · LEVEL 3 MAX 강화). levels[0] = LEVEL 2, levels[1] = LEVEL 3
+                 게이지 100%가 되면 쓸 수 있고, 쓰면 0%로. 게이지는 캐릭터 역할에 맞는 행동으로 참 (config.js ULTIMATE)
+   attack.chill  새 STEP 3 프로스트 기본 공격: 맞은 상대를 잠깐 느리게 { factor, sec }
+   ============================================================ */
+
+const CHARACTERS = {
+  blaster: {
+    id: 'blaster', name: '블래스터', role: '공격형', tagline: '강한 3발 공격',
+    // 새 STEP 4 밸런스: 3:3 교전 실험에서 혼자 이기는 판이 너무 많아 체력 100 → 95, 탄 18 → 16, 충전 1.2 → 1.3초
+    hp: 95, speed: 5.0,
+    // 새 STEP 3: 탄이 조금 더 빠르고 커서 맞히는 손맛이 좋음 (중거리 공격형)
+    // PNG 캐릭터 적용: 캐릭터마다 탄약 수가 다름 — 블래스터는 3발뿐이지만 한 발이 가장 셈 (16 → 18, 충전 1.3 → 1.45초)
+    attack: { name: '에너지탄', damage: 18, range: 9, reloadSec: 1.45, ammo: 3, shape: 'bolt', speed: 18, size: 0.23 },
+    special: { name: '에너지 폭발', type: 'blast', castRange: 12, delay: 0.5, cost: 25,
+      desc: '고른 곳에 원을 놓으면 0.5초 뒤 원 안의 상대에게 피해 + 원 밖으로 밀어냄 (존에서 밀어내기)',
+      levels: [
+        // 새 STEP 4: 밀어내기가 생긴 만큼 피해는 25·30·40 → 20·25·30 (밀어내기가 이 캐릭터의 핵심)
+        { r: 2, damage: 20, knockback: 1.2 },
+        { r: 3, damage: 25, knockback: 1.8 },
+        { r: 3, damage: 30, knockback: 3.0 }, // MAX: 범위는 LV2 그대로(교실 피드백), 피해·밀어내기만 강해짐
+      ] },
+    // 궁극기 (LEVEL 2 해금 · LEVEL 3 강화): 짧게 모은 뒤 큰 에너지탄이 직선으로 날아감 — 여러 명 관통 + 밀어냄 (벽에서는 멈춤)
+    //   한 번에 쓰러뜨리지 못하게 피해는 상대 최대 체력의 60%를 넘지 않음 (즉사 불가)
+    ultimate: { name: '메가 에너지 캐논', desc: '0.5초 모은 뒤 큰 에너지탄 발사 · 여러 명 관통 · 뒤로 밀어냄',
+      levels: [
+        { charge: 0.5, damage: 42, range: 16, width: 0.7, speed: 24, knockback: 2.2 },
+        { charge: 0.5, damage: 52, range: 20, width: 0.85, speed: 26, knockback: 3.0 },
+      ] },
+    accent: '#ff6b8a', emblem: 'diamond',
+  },
+  guardian: {
+    id: 'guardian', name: '가디언', role: '방어형', tagline: '튼튼한 방어형',
+    hp: 130, speed: 4.3,
+    // 새 STEP 3: 공격도 가장 세고 보호막도 무적이던 것을 조정 — 충격파 22 → 17, 보호막은 막는 양이 있음
+    // PNG 캐릭터 적용: 탄약·공격력 보통 (4발 · 17 → 15, 충전 1.6 → 1.5초) — 대신 체력이 가장 높음
+    // 교실 피드백: 가까이 붙어야 하는 근접 공격이라 조금 올림 15 → 17
+    attack: { name: '부채꼴 충격파', damage: 17, range: 4, reloadSec: 1.5, ammo: 4, shape: 'wave', speed: 12, size: 0.3, spreadDeg: 70 },
+    // 에너지 방벽: 나를 중심으로 한 반지름 r 원의 앞쪽 일부(호)를 따라 벽이 생김
+    //   교실 피드백: 벽을 들고 다님 — 가디언을 따라 움직이고 늘 바라보는 쪽을 막음 (쓰러지면 사라짐)
+    //   - 벽을 넘어오는 상대 공격을 막음 (막는 양을 다 쓰면 깨짐), 우리 팀·사람은 그냥 지나감
+    //   - 생기는 순간 벽 근처·안쪽의 상대를 벽 바깥으로 밀어내고 피해를 조금 줌
+    //   - arcDeg: 벽이 차지하는 각도 (원의 몇 도만큼), push: 밀어내기 피해
+    special: { name: '에너지 방벽', type: 'shield', castRange: 0, cost: 25,
+      desc: '원의 일부(호) 모양 에너지벽을 들고 다님 (바라보는 쪽을 막음) · 넘어오는 공격을 막음 · 생길 때 상대를 밀어내며 피해',
+      levels: [
+        { r: 2, duration: 4, shieldHp: 60, arcDeg: 110, pushDamage: 8 },
+        { r: 3, duration: 5, shieldHp: 90, arcDeg: 120, pushDamage: 10 },
+        { r: 4, duration: 6, shieldHp: 130, arcDeg: 130, pushDamage: 12, fortify: true }, // MAX: 벽 뒤 우리 팀은 밀려나지 않고 느려지지 않음
+      ] },
+    // 궁극기 (교실 피드백): 방패를 앞세우고 앞으로 돌진 — 부딪힌 상대는 기절(스턴: 못 움직이고 못 쏨) + 피해 + 조금 밀려남
+    //   dist 돌진 거리(m) · dur 돌진 시간(초) · width 부딪히는 폭(m) · stunSec 기절 시간 · reduce 돌진 중 받는 피해 줄임
+    //   벽에 부딪히면 멈춤. 피해는 상대 최대 체력의 60%를 넘지 않음
+    ultimate: { name: '방패 돌진', desc: '방패를 앞세워 앞으로 돌진 · 부딪힌 상대 기절(못 움직이고 못 쏨) + 피해',
+      levels: [
+        { dist: 8, dur: 0.45, width: 1.0, damage: 25, stunSec: 1.3, reduce: 0.5 },
+        { dist: 10, dur: 0.5, width: 1.2, damage: 32, stunSec: 1.7, reduce: 0.6 },
+      ] },
+    accent: '#ffd84d', emblem: 'shield',
+  },
+  medic: {
+    id: 'medic', name: '메딕', role: '지원형', tagline: '약하지만 많이 쏘는 지원형',
+    hp: 95, speed: 4.8,
+    // 새 STEP 4: 스킬이 잠겨 있어도 팀에 도움이 되도록 — 메딕 둘레 3m 안의 우리 팀(메딕 자신은 빼고)이 1초에 1.5씩 회복
+    passive: { name: '회복 오라', r: 3, healPerSec: 1.5 },
+    // 새 STEP 4: 스킬이 잠긴 경기 초반에 너무 약해서 탄 10 → 12 (+ 회복 오라)
+    // PNG 캐릭터 적용: 탄약이 가장 많고(6발) 빨리 차지만 한 발은 약함 (12 → 9, 충전 1.3 → 0.95초) — 빠른 견제
+    // 공격 보강: 너무 약해 견제가 안 됨 → 한 발 9 → 11, 탄 속도 14 → 16 (블래스터보다는 약하게)
+    attack: { name: '에너지탄', damage: 11, range: 10, reloadSec: 0.95, ammo: 6, shape: 'bolt', speed: 16, size: 0.17 },
+    // 교실 피드백: 디버프 추가 — 같은 원 안의 상대는 「약화」(방어력↓: 받는 피해 weakPct 만큼 더), 원을 나가도 1초 더
+    special: { name: '회복·약화존', type: 'heal', castRange: 9, cost: 25,
+      desc: '원 안의 우리 팀 체력을 매초 회복 + 원 안의 상대는 약화(방어력↓: 받는 피해 증가)',
+      levels: [
+        // 새 STEP 4: 1초 회복 8·10·12 → 9·11·13 / PNG 캐릭터 적용: 탄약이 많아진 만큼 MAX 는 13 → 12, 놓자마자 +15 → +10
+        { r: 2, duration: 5, healPerSec: 9, weakPct: 0.15 },
+        { r: 3, duration: 6, healPerSec: 11, weakPct: 0.2 },
+        { r: 4, duration: 7, healPerSec: 12, burst: 10, weakPct: 0.25 }, // MAX: 놓자마자 +10 바로 회복
+      ] },
+    // 궁극기 (교실 피드백): 넓은 원 안 우리 팀 체력 모두 회복 + 원 안에서 쓰러져 재충전(부활)을 기다리는 친구는
+    //   기다리지 않고 쓰러진 그 자리에서 바로 부활 (체력 가득)
+    ultimate: { name: '생명 에너지 폭발', desc: '넓은 원 안 우리 팀 체력 모두 회복 · 원 안에서 쓰러진 친구는 그 자리에서 바로 부활',
+      levels: [
+        { r: 6, healPct: 1, regenPct: 0, regenSec: 0, revive: true },
+        { r: 7.5, healPct: 1, regenPct: 0, regenSec: 0, revive: true },
+      ] },
+    accent: '#6dffa8', emblem: 'plus',
+  },
+  speeder: {
+    id: 'speeder', name: '스피더', role: '기동형', tagline: '빠른 기동형',
+    // 새 STEP 4: 3:3 교전에서 너무 쉽게 쓰러져 체력 85 → 90, 충전 0.9 → 0.85초 (+ 순간이동 뒤 기습탄)
+    hp: 90, speed: 6.2,
+    // 새 STEP 3: 빠른 공격수가 되지 않도록 단발 피해 14 → 12 (대신 이동·우회·기습에 강함)
+    // PNG 캐릭터 적용: 탄약 많은 편(5발) + 가장 빠른 충전 (0.85 → 0.8초)
+    attack: { name: '빠른 단발', damage: 12, range: 7, reloadSec: 0.8, ammo: 5, shape: 'bolt', speed: 22, size: 0.16 },
+    special: { name: '순간이동', type: 'blink', cost: 20,
+      desc: '내 주변 원 안 어디로든 순간이동 · 도착 뒤 2초 안 첫 탄 1.5배(기습) · 부쉬 안에서 써도 드러나지 않음',
+      levels: [
+        { r: 5 },
+        { r: 7 },
+        { r: 7, dash: 1.5 }, // MAX: 거리는 LV2 그대로(교실 피드백), 도착한 뒤 1.5초 동안 더 빠르게
+      ] },
+    // 궁극기: 잠깐 아주 빨라지고 순간이동이 강해짐 + 탄약이 더 빨리 참 (빠른 우회·기습·연사, 무적은 아님)
+    //   reloadMult: 탄약 충전 속도 배수 (1.5 → 충전 0.8초가 약 0.53초) — 평소보다 더 많이 쏠 수 있음
+    ultimate: { name: '초고속 돌파', desc: '잠깐 이동속도 크게 증가 · 탄약 충전 빨라짐 · 순간이동 거리 증가 · 순간이동 에너지 절약',
+      levels: [
+        // fireMult: 연속으로 쏠 때 간격 배수 (0.7 → 0.28초가 약 0.2초) — 교실 피드백: 공격속도·재충전 조금 더
+        { duration: 5, speedMult: 1.55, reloadMult: 1.7, fireMult: 0.7, blinkRangeMult: 1.3, blinkCostMult: 0.5 },
+        { duration: 6, speedMult: 1.7, reloadMult: 1.9, fireMult: 0.65, blinkRangeMult: 1.4, blinkCostMult: 0 },   // MAX: 순간이동 에너지 0
+      ] },
+    accent: '#ff9df5', emblem: 'chevron',
+  },
+  engineer: {
+    id: 'engineer', name: '엔지니어', role: '전략형', tagline: '장치 설치 전략형',
+    hp: 100, speed: 4.3, // 교실 피드백: 포격이 강해서 이동속도 4.6 → 4.3
+    // PNG 캐릭터 적용: 기본 공격은 보통보다 조금 약하게 (4발 · 15 → 13, 충전 1.4 → 1.2초) — 터렛이 핵심
+    // 교실 피드백: 포격형으로 — 사거리 8 → 12m, 떨어진 자리 반지름 1.4m 안 상대 모두 피해 20 (벽 너머도)
+    //   대신 탄약 4 → 3발, 충전 1.2 → 1.8초, 탄이 느려서(초속 11m) 떨어지는 곳을 보고 피할 수 있음
+    //   (1초에 주는 피해는 예전과 비슷: 13 ÷ 1.2 ≈ 10.8 → 20 ÷ 1.8 ≈ 11.1)
+    //   교실 피드백(2): 사거리 12 → 10.5m
+    attack: { name: '에너지 포격', damage: 20, range: 10.5, minRange: 2.5, splash: 1.4, reloadSec: 1.8, ammo: 3, shape: 'shell', speed: 11, size: 0.34 },
+    // 새 STEP 3: 가장 강하던 터렛 조정 — 한 명당 1개, 체력이 있어 상대가 부술 수 있음, 시간·피해 조금 줄임
+    special: { name: '원형 범위 터렛', type: 'turret', castRange: 6, boltSpeed: 14, cost: 30,
+      desc: '원 안에 들어온 상대를 터렛이 자동으로 공격 (한 명당 1개, LEVEL 3은 2개 · 상대가 쏘면 부서짐)',
+      levels: [
+        { r: 3, duration: 12, damage: 6, fireInterval: 1.0, hp: 40 },
+        { r: 4, duration: 14, damage: 8, fireInterval: 1.0, hp: 55 },
+        // MAX: 범위는 LV2 그대로(교실 피드백), 터렛 2개까지 · 원 안 부쉬에 숨은 상대를 드러냄
+        { r: 4, duration: 16, damage: 9, fireInterval: 0.8, hp: 70, sensor: true, maxCount: 2 },
+      ] },
+    // 궁극기: 엔지니어 곁을 따라다니며 가까운 상대를 자동으로 쏘는 지원 드론 (부서지지 않고 시간이 끝나면 사라짐)
+    //   터렛(제자리 방어)과 달리 따라다니며 견제 → 엔지니어가 앞으로 나갈 때 힘이 됨
+    ultimate: { name: '전투 지원 드론', desc: '나를 따라다니며 가까운 상대를 자동 공격하는 드론 소환',
+      levels: [
+        // 교실 피드백: 딜이 약하고 범위가 좁음 → 피해 7·8 → 12·14, 사거리 6.5·7.5 → 9.5·11m
+        { duration: 10, range: 9.5, interval: 0.7, damage: 12 },
+        { duration: 13, range: 11, interval: 0.55, damage: 14 },
+      ] },
+    accent: '#c49bff', emblem: 'gear',
+  },
+  frost: {
+    id: 'frost', name: '프로스트', role: '제어형', tagline: '상대를 느리게 만드는 제어형',
+    hp: 100, speed: 4.7,
+    // 새 STEP 3: 얼음탄에 맞으면 1초 동안 조금(15%) 느려짐 → 기본 공격부터 제어형
+    // 새 STEP 4: 교전에서 가장 약해서 얼음탄 12 → 14, 탄 속도 15 → 17 (+ 얼면 탄약 충전도 느려짐)
+    // PNG 캐릭터 적용: 4발 · 공격력 조금 낮게 14 → 13, 충전 1.3 → 1.15초 — 둔화와 지역 제어가 핵심
+    attack: { name: '얼음탄', damage: 13, range: 9, reloadSec: 1.15, ammo: 4, shape: 'bolt', speed: 17, size: 0.2,
+      chill: { factor: 0.85, sec: 1.0 } },
+    special: { name: '원형 둔화지역', type: 'slow', castRange: 10, cost: 25,
+      // 수정 STEP 5: 제어형 — 느려진 상대는 이동뿐 아니라 점령 준비(3초 버티기)와 점령 게이지도 같은 비율로 느려짐
+      // 빙결 둔화: 느리게 만들면서 원 안에 있는 동안 1초마다 조금씩 피해 (dps)
+      desc: '원 안의 상대를 얼려 느리게 + 1초마다 냉기 피해 · 점령 준비·점령 게이지·탄약 충전도 느리게',
+      levels: [
+        { r: 3, duration: 5, slowFactor: 0.75, dps: 3 },
+        { r: 4, duration: 6, slowFactor: 0.65, dps: 4 },
+        { r: 4, duration: 7, slowFactor: 0.55, dps: 5, linger: 1.5 }, // 범위는 LV2 그대로(교실 피드백) · 원을 벗어나도 1.5초 더 느림
+      ] },
+    // 궁극기 (교실 피드백): 쓰면 넓은 냉기 영역 — slowSec(2초) 동안 안의 상대가 크게 느려지다가
+    //   그때 원 안에 있는 상대를 꽁꽁 얼림 (freezeSec 동안 전혀 못 움직임) + 얼음 피해. 남은 시간은 계속 느리게
+    //   피해는 최대 체력의 60%를 넘지 않음. 2초 동안 원 밖으로 빠져나가면 얼지 않음 (피할 기회)
+    ultimate: { name: '절대 빙결 지대', desc: '넓은 냉기 영역 · 2초 동안 크게 느려지다가 원 안 상대 꽁꽁(못 움직임) + 얼음 피해',
+      levels: [
+        { r: 6, duration: 5, slowFactor: 0.45, linger: 1.0, slowSec: 2, freezeSec: 2.0, damage: 18 },
+        { r: 7, duration: 6, slowFactor: 0.4, linger: 1.0, slowSec: 2, freezeSec: 2.5, damage: 24 },
+      ] },
+    accent: '#9ee8ff', emblem: 'snow',
+  },
+};
+
+// 선택 화면 등에서 쓸 순서
+const CHARACTER_ORDER = ['blaster', 'guardian', 'medic', 'speeder', 'engineer', 'frost'];
+
+// 모든 캐릭터의 몸 크기(반지름, m). 크기가 같아야 공정합니다.
+const PLAYER_RADIUS = 0.7;
+
+// 수정 STEP 4: 스킬 레벨 (0 = 잠금, 3 = MAX)
+const SKILL_LEVEL_MAX = 3;
+// 궁극기: 에너지 터미널 LEVEL 2 에서 해금 (LEVEL 1 고유 스킬 → LEVEL 2 궁극기 → LEVEL 3 MAX 스킬·궁극기 강화)
+const ULT_UNLOCK_LEVEL = 2;
+
+// 탄약
+const AMMO_MAX = 3;            // 기본 3발 (캐릭터마다 attack.ammo 로 다름)
+// 캐릭터별 탄약 수 — 블래스터는 적고 강하게, 메딕·스피더는 많이 (캐릭터를 바꾸면 쏘는 느낌이 달라지게)
+function ammoMaxOf(charId) {
+  const c = CHARACTERS[charId];
+  return (c && c.attack.ammo) || AMMO_MAX;
+}
+const MIN_FIRE_INTERVAL = 0.28; // 연속으로 쏠 때 최소 간격 (초)
